@@ -4,6 +4,9 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const schedule = require('node-schedule');
 
+// URL untuk scraping
+const url = 'https://www.rockpapershotgun.com/epic-games-free-games-list';
+
 // Inisialisasi klien WhatsApp
 const client = new Client({
    authStrategy: new LocalAuth() // Untuk menyimpan sesi secara lokal
@@ -21,63 +24,66 @@ client.on('ready', () => {
 // Fungsi untuk mengambil informasi game gratis dari Rock Paper Shotgun
 async function getEpicGamesInfo() {
    try {
-      const response = await axios.get("https://www.rockpapershotgun.com/epic-games-free-games-list");
-      const html = response.data;
-      const $ = cheerio.load(html);
+      // Ambil HTML dari situs
+      const { data } = await axios.get(url);
 
-      const results = [];
-      const relevantSections = $("p:contains('free until'), p:contains('free from')");
+      // Load HTML ke cheerio
+      const $ = cheerio.load(data);
 
-      relevantSections.each((index, element) => {
-         const parent = $(element);
-         const text = parent.text().trim();
+      // Menyimpan informasi game
+      const games = [];
 
-         const match = text.match(/(.+?free (until|from) .+)/);
-         if (match) {
-            const title = match[1];
-            const linkTag = parent.find('a[href*="store.epicgames"]');
-            if (linkTag.length) {
-               const gameUrl = linkTag.attr('href');
-               const descriptionTag = linkTag.next('p');
-               const description = descriptionTag.text().trim();
+      // Menargetkan elemen yang mengandung informasi game
+      $('.article_body .article_body_content').each((index, element) => {
+         // Ambil elemen h3
+         const h3Element = $(element).find('h3');
+         const title = h3Element.text().trim();
 
-               results.push({
-                  Title: title,
-                  Link: gameUrl,
-                  Description: description
-               });
-            }
+         // Ambil elemen a di dalam h3
+         const linkElement = h3Element.find('a');
+         const link = linkElement.attr('href');
+
+         // Ambil deskripsi jika ada
+         const description = $(element).find('.post-excerpt').text().trim();
+
+         if (title && link) {
+            games.push({
+               Title: title,
+               Link: link.startsWith('http') ? link : `https://www.rockpapershotgun.com${link}`,
+               Description: description
+            });
          }
       });
 
-      return results;
+      return games;
    } catch (error) {
-      console.error("Error fetching game info:", error);
+      console.error('Error fetching data:', error);
       return [];
    }
 }
 
 // Handler untuk pesan masuk
 client.on('message', async message => {
-   if (message.body === '/hello') {
-      message.reply('Hello, how can I help you?');
-   } else if (message.body === '/games') {
-      message.reply('Fetching game information...');
+   if (message.body.startsWith('/')) {
+      if (message.body === '/hello') {
+         message.reply('Hello, how can I help you?');
+      } else if (message.body === '/games') {
+         message.reply('Fetching game information...');
 
-      // Ambil data game dan kirim ke pengguna
-      const gamesInfo = await getEpicGamesInfo();
-      if (gamesInfo.length > 0) {
-         let responseMessage = "Here are the current free games on Epic Games:\n\n";
-         gamesInfo.forEach(game => {
-            responseMessage += `Title: ${game.Title}\nLink: ${game.Link}\nDescription: ${game.Description}\n\n`;
-         });
-         message.reply(responseMessage);
+         // Ambil data game dan kirim ke pengguna
+         const gamesInfo = await getEpicGamesInfo();
+         if (gamesInfo.length > 0) {
+            let responseMessage = "Here are the current free games on Epic Games:\n\n";
+            gamesInfo.forEach(game => {
+               responseMessage += `Title: ${game.Title}\nLink: ${game.Link}\nDescription: ${game.Description}\n\n`;
+            });
+            message.reply(responseMessage);
+         } else {
+            message.reply("Sorry, I couldn't find any free games at the moment.");
+         }
       } else {
-         message.reply("Sorry, I couldn't find any free games at the moment.");
+         message.reply("Invalid command. Please use '/hello' or '/games'.");
       }
-   }
-   else {
-      message.reply("dongo");
    }
 });
 
