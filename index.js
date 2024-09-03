@@ -26,25 +26,23 @@ async function getEpicGamesInfo() {
    try {
       // Ambil HTML dari situs
       const { data } = await axios.get(url);
-
-      // Load HTML ke cheerio
       const $ = cheerio.load(data);
 
       // Menyimpan informasi game
       const games = [];
 
-      // Menargetkan elemen yang mengandung informasi game
-      $('.article_body .article_body_content').each((index, element) => {
-         // Ambil elemen h3
-         const h3Element = $(element).find('h3');
-         const title = h3Element.text().trim();
+      // Temukan elemen yang berisi informasi tentang permainan gratis
+      const relevantSections = $('h3:contains("free until"), h3:contains("free from")');
 
-         // Ambil elemen a di dalam h3
-         const linkElement = h3Element.find('a');
-         const link = linkElement.attr('href');
+      if (relevantSections.length === 0) {
+         console.log("Tidak ditemukan informasi permainan gratis.");
+         return [];
+      }
 
-         // Ambil deskripsi jika ada
-         const description = $(element).find('.post-excerpt').text().trim();
+      relevantSections.each((index, element) => {
+         const title = $(element).text();
+         const link = $(element).find('a').attr('href');
+         const description = $(element).next('p').text() || 'Deskripsi tidak tersedia';
 
          if (title && link) {
             games.push({
@@ -57,7 +55,7 @@ async function getEpicGamesInfo() {
 
       return games;
    } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Terjadi kesalahan saat melakukan scraping:', error);
       return [];
    }
 }
